@@ -1,5 +1,6 @@
 <template>
 	<div class="container">
+	
 		<button @click="chooseImage" class="btn">选择图片并去除水印</button>
 
 		<div v-if="originalImage" class="image-area">
@@ -29,7 +30,7 @@
 	// 请替换为你的服务器真实IP或域名
 	// 注意：微信小程序要求使用 HTTPS 域名，开发调试阶段需在详情里勾选“不校验合法域名”
 const API_URL = '/api/remove-watermark';
-const BASE_URL = 'http://111.231.120.121:3000'; // 用于拼接图片地址
+const BASE_URL = 'http://111.231.120.121:3001'; // 用于拼接图片地址
 
 	const chooseImage = () => {
 		uni.chooseImage({
