@@ -226,9 +226,23 @@ const uploadFiles = async (imagePath, maskPath) => {
 
     if (!response.ok) throw new Error('Server Error');
 
-    // 处理二进制流返回图片
-    const resultBlob = await response.blob();
+	// 1. 关键：检查后端返回的类型
+	    const contentType = response.headers.get('content-type');
+	    if (contentType && contentType.includes('application/json')) {
+	        // 如果后端报错返回了 JSON（比如 {"code": 500...}），这里要捕获
+	        const json = await response.json();
+	        throw new Error(json.msg || '处理失败');
+	    }
+	
+	    // 2. 获取二进制 Blob
+	    const resultBlob = await response.blob();
+	    
+	    // 3. 检查 Blob 大小 (防止返回空文件)
+	    if (resultBlob.size === 0) {
+	        throw new Error('返回的图片为空');
+	    }
     const resultUrl = URL.createObjectURL(resultBlob);
+	console.log('生成的 Blob URL:', resultUrl);
     
     handleSuccess(resultUrl);
 
@@ -264,20 +278,29 @@ const urlToBlob = (url) => {
 };
 
 const handleSuccess = (url) => {
-  processedImage.value = url;
-  loading.value = false;
-  step.value = 'result';
-  sliderPosition.value = 100;
-  
-  // 自动演示一下对比
-  setTimeout(() => {
-    let pos = 100;
-    const timer = setInterval(() => {
-      pos -= 2;
-      sliderPosition.value = pos;
-      if(pos <= 50) clearInterval(timer);
-    }, 10);
-  }, 500);
+  // 预加载图片，确保可用
+  const img = new Image();
+  img.onload = () => {
+      processedImage.value = url;
+      loading.value = false;
+      step.value = 'result';
+      sliderPosition.value = 100;
+      
+      // 自动演示
+      setTimeout(() => {
+        let pos = 100;
+        const timer = setInterval(() => {
+          pos -= 2;
+          sliderPosition.value = pos;
+          if(pos <= 50) clearInterval(timer);
+        }, 10);
+      }, 500);
+  };
+  img.onerror = () => {
+      loading.value = false;
+      uni.showToast({ title: '图片加载失败', icon: 'none' });
+  };
+  img.src = url;
 };
 
 // ================= 4. 结果页逻辑 =================
