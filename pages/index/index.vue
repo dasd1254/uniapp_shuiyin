@@ -1,101 +1,141 @@
 <template>
-  <view class="container">
-    <view class="header">
-      <text class="title">AI 魔法消除</text>
-      <text class="subtitle">涂抹水印，智能重绘</text>
-    </view>
+	<view class="container">
+		<view class="header">
+			<text class="title">AI 魔法消除</text>
+			<text class="subtitle">涂抹水印，智能重绘</text>
+		</view>
 
-    <view v-if="step === 'upload'" class="upload-zone" @click="chooseImage">
-      <image src="/static/upload-icon.png" class="upload-icon" mode="widthFix" />
-      <text class="upload-text">点击上传图片</text>
-      <text class="upload-sub">支持 JPG/PNG，去水印效果更好</text>
-    </view>
+		<view v-if="step === 'upload'" class="upload-zone" @click="chooseImage">
+			<image src="/static/upload-icon.png" class="upload-icon" mode="widthFix" />
+			<text class="upload-text">点击上传图片</text>
+			<text class="upload-sub">支持 JPG/PNG，去水印效果更好</text>
+		</view>
 
-    <view v-else-if="step === 'paint'" class="paint-zone">
-      <view class="canvas-wrapper" :style="{ width: imgWidth + 'px', height: imgHeight + 'px' }">
-        <image :src="originalImage" class="bg-img" :style="{ width: imgWidth + 'px', height: imgHeight + 'px' }" />
-        
-        <canvas 
-          canvas-id="maskCanvas" 
-          id="maskCanvas"
-          class="mask-canvas"
-          :style="{ width: imgWidth + 'px', height: imgHeight + 'px' }"
-          @touchstart="touchStart"
-          @touchmove="touchMove"
-          @touchend="touchEnd"
-          disable-scroll="true"
-        ></canvas>
-      </view>
+		<view v-else-if="step === 'paint'" class="paint-zone">
+			<view class="canvas-wrapper" :style="{ width: imgWidth + 'px', height: imgHeight + 'px' }">
+				<image :src="originalImage" class="bg-img"
+					:style="{ width: imgWidth + 'px', height: imgHeight + 'px' }" />
 
-      <view class="paint-tools">
-        <view class="tool-info">请涂抹覆盖水印区域</view>
-        <view class="tool-btns">
-          <button class="btn mini" @click="clearCanvas">重涂</button>
-          <button class="btn primary" @click="submitProcess" :loading="loading">开始消除</button>
-        </view>
-      </view>
-    </view>
+				<canvas canvas-id="maskCanvas" id="maskCanvas" class="mask-canvas"
+					:style="{ width: imgWidth + 'px', height: imgHeight + 'px' }" :width="imgWidth" :height="imgHeight"
+					@touchstart="handleStart" @touchmove="handleMove" @touchend="handleEnd" @mousedown="handleStart"
+					@mousemove="handleMove" @mouseup="handleEnd" @mouseleave="handleEnd" disable-scroll="true"></canvas>
+			</view>
 
-    <view v-else-if="step === 'result'" class="compare-zone">
-      <view 
-        class="compare-container" 
-        :style="{ width: imgWidth + 'px', height: imgHeight + 'px' }"
-        @touchstart="handleSliderStart" 
-        @touchmove="handleSliderMove"
-      >
-        <image :src="processedImage" class="result-img full-size" mode="aspectFill" />
-        
-        <view class="top-img-wrapper" :style="{ width: sliderPosition + '%' }">
-          <image :src="originalImage" class="full-size" mode="aspectFill" />
-          <view class="label original-label">原图</view>
-        </view>
+			<view class="paint-tools">
+				<view class="tool-info">涂抹水印区域</view>
+				<view class="slider-box">
+					<text class="label">画笔大小</text>
+					<slider :value="lineWidth" @change="e => lineWidth = e.detail.value" min="5" max="50"
+						activeColor="#007aff" block-size="20" />
+				</view>
 
-        <view class="slider-bar" :style="{ left: sliderPosition + '%' }">
-          <view class="slider-btn"><text class="arrow">↔</text></view>
-        </view>
-        
-        <view class="label result-label">修复后</view>
-      </view>
+				<view class="tool-btns">
+					<button class="btn mini" @click="undo">撤销</button>
+					<button class="btn mini" @click="clearCanvas">清空</button>
+					<button class="btn primary" @click="submitProcess" :loading="loading">消除</button>
+				</view>
+			</view>
+		</view>
 
-      <view class="action-area">
-        <button class="btn secondary" @click="reset">重新上传</button>
-        <button class="btn primary" @click="saveImage">保存相册</button>
-      </view>
-    </view>
+		<view v-else-if="step === 'result'" class="compare-zone">
+			<view class="compare-container" :style="{ width: imgWidth + 'px', height: imgHeight + 'px' }"
+				@touchstart="handleSliderStart" @touchmove="handleSliderMove" @touchend="handleSliderEnd"
+				@mousedown="handleSliderStart" @mousemove="handleSliderMove" @mouseup="handleSliderEnd"
+				@mouseleave="handleSliderEnd">
+				<image :src="processedImage" class="result-img full-size" mode="aspectFill" />
 
-    <view v-if="loading" class="loading-mask">
-      <view class="spinner"></view>
-      <text class="loading-text">AI 正在重绘画面...</text>
-    </view>
+				<view class="top-img-wrapper" :style="{ width: sliderPosition + '%' }">
+					<image :src="originalImage" class="full-size" mode="aspectFill" />
+					<view class="label original-label">原图</view>
+				</view>
 
-  </view>
+				<view class="slider-bar" :style="{ left: sliderPosition + '%' }">
+					<view class="slider-btn"><text class="arrow">↔</text></view>
+				</view>
+
+				<view class="label result-label">修复后</view>
+			</view>
+
+			<view class="action-area">
+				<button class="btn secondary" @click="reset">重新上传</button>
+				<button class="btn primary" @click="saveImage">保存相册</button>
+			</view>
+		</view>
+
+		<view v-if="loading" class="loading-mask">
+			<view class="progress-box">
+				<text class="loading-title">{{ loadingTitle }}</text>
+
+				<view class="progress-bar-bg">
+					<view class="progress-bar-fill" :style="{ width: progress + '%' }"></view>
+				</view>
+
+				<text class="progress-num">{{ Math.floor(progress) }}%</text>
+
+				<text class="loading-tip">AI 正在努力计算像素，请稍候...</text>
+			</view>
+		</view>
+
+	</view>
 </template>
 
+
 <script setup>
-import { ref, nextTick } from 'vue';
+// 1. 【引入】getCurrentInstance
+import { ref, nextTick, getCurrentInstance } from 'vue';
+
+// 2. 【关键】获取当前组件实例 (必须写在所有函数外面！)
+const instance = getCurrentInstance();
 
 // ================= 配置区 =================
-// 请替换为你服务器的真实 IP
 const BASE_URL = 'http://111.231.120.121:3001'; 
 const API_URL = `${BASE_URL}/api/remove-watermark`;
 
 // ================= 状态变量 =================
-const step = ref('upload'); // 当前步骤: upload | paint | result
+const step = ref('upload'); 
 const originalImage = ref('');
 const processedImage = ref('');
 const loading = ref(false);
 
-// 图片尺寸适配
 const imgWidth = ref(300);
 const imgHeight = ref(300);
-
-// 画布上下文
 let ctx = null;
 
-// 对比滑块
+const isDrawing = ref(false); 
+const isSliderDragging = ref(false);
 const sliderPosition = ref(50);
 
-// ================= 1. 图片选择与适配 =================
+// 进度条相关
+const progress = ref(0);
+const loadingTitle = ref('正在上传...');
+let progressTimer = null;
+
+// ================= 进度条逻辑 =================
+const startFakeProgress = () => {
+  progress.value = 0;
+  loadingTitle.value = '正在上传图片...';
+  if (progressTimer) clearInterval(progressTimer);
+
+  progressTimer = setInterval(() => {
+    if (progress.value < 30) {
+      progress.value += 2;
+    } else if (progress.value < 80) {
+      progress.value += 0.5;
+      loadingTitle.value = 'AI 正在智能识别水印...';
+    } else if (progress.value < 99) {
+      progress.value += 0.1;
+      loadingTitle.value = '正在进行深度重绘...';
+    }
+  }, 50);
+};
+
+const stopFakeProgress = () => {
+  if (progressTimer) clearInterval(progressTimer);
+  // 如果是错误停止，不设为100；如果是成功，外部会设为100
+};
+
+// ================= 1. 图片选择 =================
 const chooseImage = () => {
   uni.chooseImage({
     count: 1,
@@ -104,28 +144,25 @@ const chooseImage = () => {
       const filePath = res.tempFilePaths[0];
       originalImage.value = filePath;
       
-      // 获取图片信息以计算画布尺寸
       uni.getImageInfo({
         src: filePath,
         success: (image) => {
           calculateCanvasSize(image.width, image.height);
           step.value = 'paint';
           
-          // 初始化画布
-          nextTick(() => {
+          setTimeout(() => {
             initCanvas();
-          });
+          }, 200);
         }
       });
     }
   });
 };
 
-// 计算适配屏幕的画布尺寸
 const calculateCanvasSize = (w, h) => {
   const sysInfo = uni.getSystemInfoSync();
-  const maxWidth = sysInfo.windowWidth - 40; // 左右留边距
-  const maxHeight = sysInfo.windowHeight * 0.6; // 最大高度占屏 60%
+  const maxWidth = sysInfo.windowWidth - 40; 
+  const maxHeight = sysInfo.windowHeight * 0.6; 
   
   let scale = 1;
   if (w > maxWidth || h > maxHeight) {
@@ -136,43 +173,58 @@ const calculateCanvasSize = (w, h) => {
   imgHeight.value = h * scale;
 };
 
-// ================= 2. 画布涂抹逻辑 =================
+// ================= 2. 画布逻辑 =================
 const initCanvas = () => {
-  ctx = uni.createCanvasContext('maskCanvas');
-  // 设置画笔样式
+  // 【关键修改】传入 instance，否则找不到 canvas
+  ctx = uni.createCanvasContext('maskCanvas', instance);
+  
+  if (!ctx) {
+    console.error("❌ 画布上下文创建失败");
+    return;
+  }
+  
   ctx.setLineCap('round');
   ctx.setLineJoin('round');
-  ctx.setLineWidth(20); // 笔触粗细，可以做成滑块调节
-  
-  // 关键：我们要生成蒙版。
-  // 前端显示：背景半透明黑，画笔白色（白色代表 Mask 区域）
-  // 这样导出的图片：背景透明（或黑），笔迹白。正是 LaMa 需要的 Mask。
-  
-  // 填充一个半透明黑色背景，方便用户看清原图
-  // 注意：实际导出给后端的 Mask 应该是 黑底白画。
-  // 但 uni-app canvas 导出带 alpha 通道。
-  // 我们这里只画笔触。为了视觉效果，我们在 CSS 里给 canvas 加了个半透明背景。
-  
-  ctx.setStrokeStyle('rgba(255, 255, 255, 0.8)'); // 半透明白，方便看
+  ctx.setLineWidth(20); 
+  ctx.setStrokeStyle('rgba(255, 255, 255, 0.8)'); 
 };
 
-const touchStart = (e) => {
+const getPoint = (e) => {
+  let x = 0, y = 0;
+  if (e.touches && e.touches.length > 0) {
+    x = e.touches[0].x;
+    y = e.touches[0].y;
+  } else {
+    if (e.offsetX !== undefined) {
+       x = e.offsetX;
+       y = e.offsetY;
+    } else if (e.clientX !== undefined) {
+       x = e.clientX; 
+       y = e.clientY; 
+    }
+  }
+  return { x, y };
+};
+
+const handleStart = (e) => {
   if (!ctx) return;
-  const { x, y } = e.touches[0];
+  isDrawing.value = true;
+  const { x, y } = getPoint(e);
   ctx.moveTo(x, y);
-  ctx.beginPath(); // 修复部分真机上笔画连在一起的问题
+  ctx.beginPath(); 
 };
 
-const touchMove = (e) => {
-  if (!ctx) return;
-  const { x, y } = e.touches[0];
+const handleMove = (e) => {
+  if (!ctx || !isDrawing.value) return;
+  if (e.preventDefault) e.preventDefault();
+  const { x, y } = getPoint(e);
   ctx.lineTo(x, y);
   ctx.stroke();
-  ctx.draw(true); // true 表示保留之前的内容
+  ctx.draw(true); 
 };
 
-const touchEnd = () => {
-  // 可以在这里保存一下历史记录做撤销功能
+const handleEnd = () => {
+  isDrawing.value = false;
 };
 
 const clearCanvas = () => {
@@ -181,41 +233,46 @@ const clearCanvas = () => {
   ctx.draw();
 };
 
-// ================= 3. 提交与处理 (核心难点) =================
+// ================= 3. 提交与处理 =================
 const submitProcess = () => {
   loading.value = true;
+  startFakeProgress(); // 启动进度条
 
-  // 1. 将画布导出为图片文件 (Mask)
-  uni.canvasToTempFilePath({
-    canvasId: 'maskCanvas',
-    fileType: 'png',
-    width: imgWidth.value,
-    height: imgHeight.value,
-    destWidth: imgWidth.value, // 保持清晰度，可 * 2
-    destHeight: imgHeight.value,
-    success: (res) => {
-      const maskPath = res.tempFilePath;
-      uploadFiles(originalImage.value, maskPath);
-    },
-    fail: (err) => {
-      loading.value = false;
-      uni.showToast({ title: '生成蒙版失败', icon: 'none' });
-    }
-  });
+  // 延时确保渲染
+  setTimeout(() => {
+      uni.canvasToTempFilePath({
+        canvasId: 'maskCanvas',
+        fileType: 'png',
+        width: imgWidth.value,
+        height: imgHeight.value,
+        destWidth: imgWidth.value, 
+        destHeight: imgHeight.value,
+        success: (res) => {
+          const maskPath = res.tempFilePath;
+          console.log("蒙版生成成功:", maskPath);
+          uploadFiles(originalImage.value, maskPath);
+        },
+        fail: (err) => {
+          console.error("蒙版生成失败:", err);
+          loading.value = false;
+          stopFakeProgress(); // 【关键】失败要停止进度条
+          uni.showToast({ title: '生成蒙版失败', icon: 'none' });
+        }
+      }, instance); // 【关键】这里必须传入 instance！
+  }, 200);
 };
 
-// 2. 上传两个文件 (原图 + 蒙版)
-// 注意：H5 和 App 处理方式不同，这里使用 H5 兼容性最好的 fetch 方式
-// 如果是小程序，需要使用 uni.uploadFile 的 files 参数 (部分平台不支持) 或者分别上传
 const uploadFiles = async (imagePath, maskPath) => {
-  
   // #ifdef H5
   try {
     const formData = new FormData();
-    // 将文件路径转换为 Blob (H5特有操作)
     const imageBlob = await urlToBlob(imagePath);
     const maskBlob = await urlToBlob(maskPath);
     
+    // 【关键】检查文件大小，防止传空文件导致后端 500
+    console.log("原图大小:", imageBlob.size, "蒙版大小:", maskBlob.size);
+    if (maskBlob.size < 100) throw new Error("蒙版数据异常(为空)");
+
     formData.append('image', imageBlob, 'image.png');
     formData.append('mask', maskBlob, 'mask.png');
 
@@ -226,43 +283,35 @@ const uploadFiles = async (imagePath, maskPath) => {
 
     if (!response.ok) throw new Error('Server Error');
 
-	// 1. 关键：检查后端返回的类型
-	    const contentType = response.headers.get('content-type');
-	    if (contentType && contentType.includes('application/json')) {
-	        // 如果后端报错返回了 JSON（比如 {"code": 500...}），这里要捕获
-	        const json = await response.json();
-	        throw new Error(json.msg || '处理失败');
-	    }
-	
-	    // 2. 获取二进制 Blob
-	    const resultBlob = await response.blob();
-	    
-	    // 3. 检查 Blob 大小 (防止返回空文件)
-	    if (resultBlob.size === 0) {
-	        throw new Error('返回的图片为空');
-	    }
-    const resultUrl = URL.createObjectURL(resultBlob);
-	console.log('生成的 Blob URL:', resultUrl);
+    const resultBlob = await response.blob();
+    if (resultBlob.size === 0) throw new Error('返回的图片为空');
     
-    handleSuccess(resultUrl);
+    const resultUrl = URL.createObjectURL(resultBlob);
+    
+    // 成功！跑满进度条
+    progress.value = 100;
+    loadingTitle.value = "处理完成！";
+    stopFakeProgress();
+
+    setTimeout(() => {
+        handleSuccess(resultUrl);
+    }, 500);
 
   } catch (error) {
     console.error(error);
     loading.value = false;
-    uni.showToast({ title: '处理失败，请检查网络', icon: 'none' });
+    stopFakeProgress(); // 【关键】出错要停止
+    uni.showToast({ title: '处理失败，请重试', icon: 'none' });
   }
   // #endif
 
   // #ifndef H5
-  // APP/小程序端：uni.uploadFile 不太好直接传两个文件且接收二进制流
-  // 建议：如果必须支持 APP，建议后端改一下，先存文件返回 URL。
-  // 这里尝试用 uni.uploadFile 传多文件 (仅部分支持) 或者 单独逻辑
-  uni.showToast({ title: '目前演示仅支持 H5 环境', icon: 'none' });
+  uni.showToast({ title: '演示仅支持 H5', icon: 'none' });
   loading.value = false;
+  stopFakeProgress();
   // #endif
 };
 
-// H5 工具：URL 转 Blob
 const urlToBlob = (url) => {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -278,7 +327,6 @@ const urlToBlob = (url) => {
 };
 
 const handleSuccess = (url) => {
-  // 预加载图片，确保可用
   const img = new Image();
   img.onload = () => {
       processedImage.value = url;
@@ -286,7 +334,6 @@ const handleSuccess = (url) => {
       step.value = 'result';
       sliderPosition.value = 100;
       
-      // 自动演示
       setTimeout(() => {
         let pos = 100;
         const timer = setInterval(() => {
@@ -296,23 +343,21 @@ const handleSuccess = (url) => {
         }, 10);
       }, 500);
   };
-  img.onerror = () => {
-      loading.value = false;
-      uni.showToast({ title: '图片加载失败', icon: 'none' });
-  };
   img.src = url;
 };
 
-// ================= 4. 结果页逻辑 =================
-const handleSliderStart = () => {};
+// ================= 4. 结果页滑块 =================
+const handleSliderStart = () => { isSliderDragging.value = true; };
+const handleSliderEnd = () => { isSliderDragging.value = false; };
 const handleSliderMove = (e) => {
+  if (e.type === 'mousemove' && !isSliderDragging.value) return;
   const sysInfo = uni.getSystemInfoSync();
-  const screenWidth = sysInfo.windowWidth; 
-  // 简单计算，假设居中
-  let clientX = e.touches[0].clientX;
-  // 修正 margin (40rpx approx 20px)
-  let rectLeft = (screenWidth - imgWidth.value) / 2;
   
+  let clientX;
+  if (e.touches && e.touches.length > 0) clientX = e.touches[0].clientX;
+  else clientX = e.clientX;
+
+  let rectLeft = (sysInfo.windowWidth - imgWidth.value) / 2;
   let percent = ((clientX - rectLeft) / imgWidth.value) * 100;
   if(percent < 0) percent = 0;
   if(percent > 100) percent = 100;
@@ -323,6 +368,8 @@ const reset = () => {
   step.value = 'upload';
   processedImage.value = '';
   originalImage.value = '';
+  isDrawing.value = false;
+  progress.value = 0;
 };
 
 const saveImage = () => {
@@ -333,185 +380,305 @@ const saveImage = () => {
   link.click();
   // #endif
 };
-
 </script>
 
+
 <style lang="scss">
-.container {
-  min-height: 100vh;
-  background: #f8f9fa;
-  padding: 30rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
+	.container {
+		min-height: 100vh;
+		background: #f8f9fa;
+		padding: 30rpx;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+	}
 
-.header {
-  margin: 40rpx 0;
-  text-align: center;
-  .title { font-size: 40rpx; font-weight: bold; color: #333; display: block; }
-  .subtitle { font-size: 26rpx; color: #888; margin-top: 10rpx; display: block; }
-}
+	.header {
+		margin: 40rpx 0;
+		text-align: center;
 
-/* 1. 上传区 */
-.upload-zone {
-  width: 100%;
-  height: 500rpx;
-  background: #fff;
-  border-radius: 24rpx;
-  border: 4rpx dashed #ddd;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  
-  .upload-icon { width: 100rpx; height: 100rpx; margin-bottom: 20rpx; }
-  .upload-text { font-size: 32rpx; color: #333; font-weight: 500; }
-  .upload-sub { font-size: 24rpx; color: #aaa; margin-top: 10rpx; }
-}
+		.title {
+			font-size: 40rpx;
+			font-weight: bold;
+			color: #333;
+			display: block;
+		}
 
-/* 2. 涂抹区 */
-.paint-zone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  
-  .canvas-wrapper {
-    position: relative;
-    box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.1);
-    border-radius: 12rpx;
-    overflow: hidden;
-    background: #000; /* 底色黑 */
-  }
-  
-  .bg-img {
-    position: absolute;
-    top: 0; left: 0;
-    z-index: 1;
-  }
-  
-  .mask-canvas {
-    position: absolute;
-    top: 0; left: 0;
-    z-index: 10;
-    /* 这里的背景色只是为了让用户看到图片变暗，从而看清白色的笔迹 */
-    background: rgba(0, 0, 0, 0.4); 
-  }
-  
-  .paint-tools {
-    width: 100%;
-    margin-top: 30rpx;
-    
-    .tool-info {
-      text-align: center;
-      color: #666;
-      font-size: 28rpx;
-      margin-bottom: 20rpx;
-    }
-    
-    .tool-btns {
-      display: flex;
-      gap: 20rpx;
-      
-      .btn {
-        border-radius: 50rpx;
-        font-size: 30rpx;
-        &.mini { width: 200rpx; background: #fff; color: #333; border: 1px solid #ddd; }
-        &.primary { flex: 1; background: #007aff; color: #fff; }
-      }
-    }
-  }
-}
+		.subtitle {
+			font-size: 26rpx;
+			color: #888;
+			margin-top: 10rpx;
+			display: block;
+		}
+	}
 
-/* 3. 结果对比区 */
-.compare-zone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  
-  .compare-container {
-    position: relative;
-    border-radius: 12rpx;
-    overflow: hidden;
-    box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.15);
-  }
-  
-  .full-size { width: 100%; height: 100%; display: block; }
-  
-  .result-img { position: absolute; top:0; left:0; z-index: 1; }
-  
-  .top-img-wrapper {
-    position: absolute;
-    top: 0; left: 0;
-    height: 100%;
-    z-index: 2;
-    overflow: hidden;
-    border-right: 2px solid #fff;
-    background: #fff; /* 防止透明图穿透 */
-  }
-  
-  .slider-bar {
-    position: absolute;
-    top: 0; bottom: 0;
-    width: 40rpx; /* 加宽增加触摸区域 */
-    transform: translateX(-50%);
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    
-    .slider-btn {
-      width: 60rpx; height: 60rpx;
-      background: #fff;
-      border-radius: 50%;
-      box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.3);
-      text-align: center;
-      line-height: 60rpx;
-      color: #333;
-      font-weight: bold;
-    }
-  }
-  
-  .label {
-    position: absolute; bottom: 20rpx;
-    padding: 4rpx 12rpx; background: rgba(0,0,0,0.6);
-    color: #fff; font-size: 22rpx; border-radius: 8rpx;
-  }
-  .original-label { left: 20rpx; }
-  .result-label { right: 20rpx; z-index: 1; }
-  
-  .action-area {
-    margin-top: 40rpx;
-    width: 100%;
-    display: flex;
-    gap: 30rpx;
-    .btn { flex: 1; border-radius: 50rpx; }
-    .secondary { background: #fff; border: 1px solid #ddd; }
-    .primary { background: #007aff; color: #fff; }
-  }
-}
+	/* 1. 上传区 */
+	.upload-zone {
+		width: 100%;
+		height: 500rpx;
+		background: #fff;
+		border-radius: 24rpx;
+		border: 4rpx dashed #ddd;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		/* 鼠标变为手型 */
 
-/* Loading 蒙层 */
-.loading-mask {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(255,255,255,0.9);
-  z-index: 999;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  
-  .spinner {
-    width: 60rpx; height: 60rpx;
-    border: 6rpx solid #eee;
-    border-top-color: #007aff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 20rpx;
-  }
-  .loading-text { color: #333; font-size: 30rpx; font-weight: 500; }
-}
+		.upload-icon {
+			width: 100rpx;
+			height: 100rpx;
+			margin-bottom: 20rpx;
+		}
 
-@keyframes spin { 100% { transform: rotate(360deg); } }
+		.upload-text {
+			font-size: 32rpx;
+			color: #333;
+			font-weight: 500;
+		}
+
+		.upload-sub {
+			font-size: 24rpx;
+			color: #aaa;
+			margin-top: 10rpx;
+		}
+	}
+
+	/* 2. 涂抹区 */
+	.paint-zone {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+
+		.canvas-wrapper {
+			position: relative;
+			box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.1);
+			border-radius: 12rpx;
+			overflow: hidden;
+			background: #000;
+		}
+
+		.bg-img {
+			position: absolute;
+			top: 0;
+			left: 0;
+			z-index: 1;
+		}
+
+		.mask-canvas {
+			position: absolute;
+			top: 0;
+			left: 0;
+			z-index: 10;
+			background: rgba(0, 0, 0, 0.4);
+			cursor: crosshair;
+			/* 鼠标变为十字准星 */
+		}
+
+		.paint-tools {
+			width: 100%;
+			margin-top: 30rpx;
+
+			.tool-info {
+				text-align: center;
+				color: #666;
+				font-size: 28rpx;
+				margin-bottom: 20rpx;
+			}
+
+			.tool-btns {
+				display: flex;
+				gap: 20rpx;
+
+				.btn {
+					border-radius: 50rpx;
+					font-size: 30rpx;
+					cursor: pointer;
+
+					&.mini {
+						width: 200rpx;
+						background: #fff;
+						color: #333;
+						border: 1px solid #ddd;
+					}
+
+					&.primary {
+						flex: 1;
+						background: #007aff;
+						color: #fff;
+					}
+				}
+			}
+		}
+	}
+
+	/* 3. 结果对比区 */
+	.compare-zone {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+
+		.compare-container {
+			position: relative;
+			border-radius: 12rpx;
+			overflow: hidden;
+			box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.15);
+			cursor: ew-resize;
+			/* 鼠标变为左右箭头 */
+		}
+
+		.full-size {
+			width: 100%;
+			height: 100%;
+			display: block;
+		}
+
+		.result-img {
+			position: absolute;
+			top: 0;
+			left: 0;
+			z-index: 1;
+		}
+
+		.top-img-wrapper {
+			position: absolute;
+			top: 0;
+			left: 0;
+			height: 100%;
+			z-index: 2;
+			overflow: hidden;
+			border-right: 2px solid #fff;
+			background: #fff;
+		}
+
+		.slider-bar {
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			width: 40rpx;
+			transform: translateX(-50%);
+			z-index: 10;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+
+			.slider-btn {
+				width: 60rpx;
+				height: 60rpx;
+				background: #fff;
+				border-radius: 50%;
+				box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.3);
+				text-align: center;
+				line-height: 60rpx;
+				color: #333;
+				font-weight: bold;
+			}
+		}
+
+		.label {
+			position: absolute;
+			bottom: 20rpx;
+			padding: 4rpx 12rpx;
+			background: rgba(0, 0, 0, 0.6);
+			color: #fff;
+			font-size: 22rpx;
+			border-radius: 8rpx;
+		}
+
+		.original-label {
+			left: 20rpx;
+		}
+
+		.result-label {
+			right: 20rpx;
+			z-index: 1;
+		}
+
+		.action-area {
+			margin-top: 40rpx;
+			width: 100%;
+			display: flex;
+			gap: 30rpx;
+
+			.btn {
+				flex: 1;
+				border-radius: 50rpx;
+				cursor: pointer;
+			}
+
+			.secondary {
+				background: #fff;
+				border: 1px solid #ddd;
+			}
+
+			.primary {
+				background: #007aff;
+				color: #fff;
+			}
+		}
+	}
+
+	/* Loading 蒙层 */
+	/* Loading 蒙层 & 进度条样式 */
+	.loading-mask {
+	  position: fixed;
+	  top: 0; left: 0; right: 0; bottom: 0;
+	  background: rgba(255, 255, 255, 0.95); /* 背景稍微不透明一点，遮住后面 */
+	  z-index: 999;
+	  display: flex;
+	  flex-direction: column;
+	  align-items: center;
+	  justify-content: center;
+	  
+	  .progress-box {
+	    width: 80%;
+	    max-width: 600rpx;
+	    display: flex;
+	    flex-direction: column;
+	    align-items: center;
+	  }
+	
+	  .loading-title {
+	    font-size: 34rpx;
+	    font-weight: bold;
+	    color: #333;
+	    margin-bottom: 30rpx;
+	  }
+	
+	  .progress-bar-bg {
+	    width: 100%;
+	    height: 16rpx;
+	    background: #eee;
+	    border-radius: 10rpx;
+	    overflow: hidden;
+	    margin-bottom: 20rpx;
+	  }
+	
+	  .progress-bar-fill {
+	    height: 100%;
+	    background: linear-gradient(90deg, #007aff, #00c6ff); /* 渐变色更好看 */
+	    border-radius: 10rpx;
+	    transition: width 0.1s linear; /* 丝滑过渡 */
+	  }
+	
+	  .progress-num {
+	    font-size: 40rpx;
+	    font-weight: bold;
+	    color: #007aff;
+	    font-family: Arial, Helvetica, sans-serif;
+	  }
+	
+	  .loading-tip {
+	    margin-top: 20rpx;
+	    font-size: 24rpx;
+	    color: #999;
+	  }
+	}
+
+	@keyframes spin {
+		100% {
+			transform: rotate(360deg);
+		}
+	}
 </style>
